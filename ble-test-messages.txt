@@ -1,0 +1,134 @@
+##############################################
+# AWS Labs Greengrass BlueTooth Low Energy (BLE) Gateway test commands.
+# Below provides examples for control and data messages using the 
+# sample ESP32 Micropython as a BLE edge device 
+##############################################
+
+##############################################
+##### Control Messages: 
+##### BLE device connect / disconnect / List
+##############################################
+
+### Request connected BLE device:
+Publish Topic: aws-greengrass/things/THING_NAME/ble/control/connect
+Response Topic: aws-greengrass/things/THING_NAME/ble/control/connect/response
+Error Response Topic: aws-greengrass/things//THING_NAME/ble/error
+
+Message: 
+{
+"ble-mac" : "3C:61:05:12:EE:0A"
+}
+
+Sample Response
+{
+  "status": 200,
+  "data": {
+    "ble-mac": "3C:61:05:12:EE:0A",
+    "connect-status": "success"
+  }
+}
+
+### Request disconnected from BLE device:
+Publish Topic: aws-greengrass/things/THING_NAME/ble/control/disconnect
+Response Topic: aws-greengrass/things/THING_NAME/ble/control/disconnect/response
+Error Response Topic: aws-greengrass/things/THING_NAME/ble/error
+
+Message: 
+{
+"ble-mac" : "3C:61:05:12:EE:0A"
+}
+
+Sample Response
+{
+  "status": 200,
+  "data": {
+    "ble-mac": "3C:61:05:12:EE:0A",
+    "disconnect-status": "success"
+  }
+}
+
+### Request List BLE Device and Connection Status
+Publish Topic: aws-greengrass/things/THING_NAME/ble/control/list
+Response Topic: aws-greengrass/things/THING_NAME/ble/control/list/response
+Error Response Topic: aws-greengrass/things/THING_NAME/ble/error
+
+Message:
+{} # Any, message is ignored in this request
+
+Sample Response:
+{
+  "status": 200,
+  "data": {
+    "3C:61:05:12:EE:0A": {
+      "connection-state": "conn",
+      "addr-type": "public"
+    }
+  }
+}
+
+### Request BLE Scan
+Publish Topic: aws-greengrass/things/THING_NAME/ble/control/scan
+Response Topic: aws-greengrass/things/THING_NAME/ble/control/scan/response
+Error Response Topic: aws-greengrass/things/THING_NAME/ble/error
+
+Message:
+{} # Any, message is ignored in this request.
+
+Sample Response:
+{
+  "3c:61:05:12:ee:0a": {
+    "address-type": "public",
+    "rssi-db": -22,
+    "ad-data-types": {
+      "1": {
+        "adtype-value": "06",
+        "descption": "Flags"
+      },
+      "9": {
+        "adtype-value": "BLE_Device",
+        "descption": "Complete Local Name"
+      },
+      "25": {
+        "adtype-value": "8000",
+        "descption": "Appearance"
+      },
+      "255": {
+        "adtype-value": "BLE_Device",
+        "descption": "Manufacturer"
+      }
+    }
+  },
+.....
+
+
+##############################################
+##### Data Messages: 
+##### BLE device proxy Tx / Rx Messages
+##############################################
+
+Publish Topic: aws-greengrass/things/THING_NAME/ble/tx/BLE_DEVICE_MAC
+Response Topic: aws-greengrass/things/THING_NAME/ble/rx/list/BLE_DEVICE_MAC
+Error Response Topic: aws/greengrass/things/THING_NAME/ble/error
+
+The below BLE device command samples are supported by the ESP32 micropython sample code 
+to provide a response or action the request on the uController.
+
+1. Request Describe BLE Device message:
+ {
+  "command" : "describe-ble-device"
+}
+
+2. Toggle LED:
+{
+  "command" : "toggle_led"
+}
+
+2. Request BLE Device Processor Board Temperature
+{
+  "command" : "get-processor-board-temp"
+}
+
+4. Request a HW reset of the BLE devices. 
+{
+  "command" : "hw-reset-micro"
+}

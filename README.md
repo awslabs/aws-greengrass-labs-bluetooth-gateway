@@ -235,28 +235,12 @@ JSON format, for binary or blob data it is recommend to convert to base-64 and t
 * A registered [AWS Greengrass V2 core device](https://docs.aws.amazon.com/greengrass/v2/developerguide/setting-up.html)
 * Knowledge of [AWS Greengrass Components](https://docs.aws.amazon.com/greengrass/v2/developerguide/create-components.html) and the [AWS Greengrass Developer Guide](https://docs.aws.amazon.com/greengrass/v2/developerguide).
 * AWS Greengrass Development Kit installed.
-* An active GitHub account (Optionally if forking this project).
 
-### Fork or Clone the AWS Greengrass Bluetooth Gateway Component
+### Clone the AWS Greengrass Bluetooth Gateway Component
 
-Fork or Clone this repository as per the functionality that best describes your goals below.
-
-**Method 1: Fork to new Repository:**
-Use this method if starting a new project and you intend to capture the changes into your own Git repository now or in the future.
-
-* To fork this project to your own repository, click the Fork button on the top of this page:
-
-![click-fork](readme-assets/click-fork.png)
-
-* Then select the Git account or organisation desired and the project will be forked (copied) onto that location. 
-
-* Finally, substitute in your new repository details and follow the Git clone instructions below to take a local copy of the project to develop.
-
-**Method 2: Clone to Local Copy:**
-Use this method if you are testing / developing locally and don't want to capture and version any changes you make into a separate Git repository.
 ```
 # Clone this GIT Repository
-git clone https://github.com/aws-samples/aws-greengrass-labs-bluetooth-gateway.git
+git clone https://github.com/awslabs/aws-greengrass-labs-bluetooth-gateway.git
 ```
 
 ### Publish the AWS Greengrass Bluetooth Gateway Component
@@ -283,7 +267,6 @@ At this point in the workflow before publishing your component, you would normal
     },
     "tools_version": "1.0.0"
   }
-
 ```
 
 * To build and publish the AWS Greengrass Bluetooth Gateway Component to AWS IoT Core:

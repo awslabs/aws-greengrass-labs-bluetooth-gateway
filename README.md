@@ -251,9 +251,9 @@ JSON format, for binary or blob data it is recommend to convert to base-64 and t
 
 Ensure the Greengrass core device has Python3, python3-pip and python3-venv installed.
 
-i.e: To install on Debian based Distributions:
-sudo apt-get -y install python3-pip
-sudo apt-get install python3-venv
+i.e: To install on Debian based distributions:  
+sudo apt-get -y install python3-pip  
+sudo apt-get install python3-venv  
 
 ### Clone the AWS Greengrass Bluetooth Gateway Component
 
@@ -270,7 +270,7 @@ In this guide, we will deploy the AWS Greengrass Bluetooth Gateway Component to 
 ```
 {
     "component" :{
-      "aws-greengrass-labs-bluetooth-gateway": {  # << Component name - 
+      "aws-greengrass-labs-bluetooth-gateway": {  # << Component name
         "author": "Amazon",
         "version": "LATEST",
         "build": {
@@ -306,8 +306,6 @@ The AWS Greengrass Bluetooth Gateway Component will now be published to the AWS 
 
 ![published-component](readme-assets/published-component.png)
 
-**Note:** If you changed the component name as described in gdk-config.json file, the published component name will be as you applied.
-
 ### Deploying the AWS Greengrass Bluetooth Gateway Component to an AWS Core
 
 The final step is to deploy the component to a registered AWS Greengrass Core:
@@ -325,7 +323,7 @@ If there are any issues, you can monitor the deployment on the Greengrass core i
 
 ### Validate the AWS Greengrass Bluetooth Gateway Component
 
-Assuming the AWS Greengrass Bluetooth Gateway Component has been successfully deployed to a registered AWS Greengrass device it will be listening for commands on the command topics: 
+Assuming the AWS Greengrass Bluetooth Gateway Component has been successfully deployed to a registered AWS Greengrass device it will be listening for commands on the respective control topics: 
 * aws-greengrass/things/**THING_NAME**/ble/control/connect
 * aws-greengrass/things/**THING_NAME**/ble/control/disconnect
 * aws-greengrass/things/**THING_NAME**/ble/control/list
@@ -334,7 +332,7 @@ Assuming the AWS Greengrass Bluetooth Gateway Component has been successfully de
 In the AWS Console MQTT Test page, subscribe to: aws-greengrass/things/**THING_NAME**/ble/control/#  
 This will receive any control commands from the AWS Greengrass Bluetooth Gateway.
 
-If at this stage you don't have any suitable BLE devices to connect to, you can still run a **scan** and **list** operation to validate the functionality
+If at this stage, if you don't have any suitable BLE devices to connect to, you can still run a **scan** and **list** operation to validate the functionality.
 
 * **BLE Scan**: Publish an empty object '{}' to: aws-greengrass/things/**THING_NAME**/ble/control/scan  
 After a 5 second scan, expect a response listing all of the advertising BLE devices withing range of the Greengrass BLE Gateway. 
@@ -403,24 +401,55 @@ Record the Mac address of this device and send a connect command as described ab
 **Publish Topic:** aws-greengrass/things/**THING_NAME**/ble/data/tx/**BLE_DEVICE_MAC**  
 **Response Topic:** aws-greengrass/things/**THING_NAME**/ble/data/rx/list/**BLE_DEVICE_MAC**
 
-1. Request Describe BLE Device message:
+1. Request Describe BLE Device message:  
 ```
  {
   "command" : "describe-ble-device"
  }
+  ```
+
+ Response:  
+ ```
+{
+  "data": {
+    "uname": "\"(sysname='esp32', nodename='esp32', release='1.16.0', version='v1.16 on 2021-06-23', machine='ESP32 module with ESP32')\""
+  },
+  "status": 200
+}
 ```
 
-2. Toggle LED:
+2. Toggle LED:  
 ```
 {
   "command" : "toggle_led"
 }
 ```
 
-2. Request BLE Device Processor Board Temperature
+Response:  
+```
+{
+  "data": {
+    "message": "ESP32 BLE LED Set to: 1"
+  },
+  "status": 200
+}
+```
+
+3. Request BLE Device Processor Board Temperature
 ```
 {
   "command" : "get-processor-board-temp"
+}
+```
+
+Response:  
+```
+{
+  "data": {
+    "board_temp_fahrenheit": 126,
+    "board_temp_celsius": 52.22
+  },
+  "status": 200
 }
 ```
 
@@ -430,6 +459,8 @@ Record the Mac address of this device and send a connect command as described ab
   "command" : "hw-reset-micro"
 }
 ```
+Response:  
+None, processor will do a hardware reset and silently  return to operation.  
 
 ## Known Limitations and Prickly Edges:
 

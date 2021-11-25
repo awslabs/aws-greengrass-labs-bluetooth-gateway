@@ -9,7 +9,7 @@
 ##### BLE device connect / disconnect / List
 ##############################################
 
-### Request connected BLE device:
+### Request CONNECT BLE device:
 Publish Topic: aws-greengrass/things/THING_NAME/ble/control/connect
 Response Topic: aws-greengrass/things/THING_NAME/ble/control/connect/response
 Error Response Topic: aws-greengrass/things//THING_NAME/ble/error
@@ -28,7 +28,7 @@ Sample Response
   }
 }
 
-### Request disconnected from BLE device:
+### Request DISCONNECT from BLE device:
 Publish Topic: aws-greengrass/things/THING_NAME/ble/control/disconnect
 Response Topic: aws-greengrass/things/THING_NAME/ble/control/disconnect/response
 Error Response Topic: aws-greengrass/things/THING_NAME/ble/error
@@ -47,7 +47,7 @@ Sample Response
   }
 }
 
-### Request List BLE Device and Connection Status
+### Request LIST BLE Device and Connection Status
 Publish Topic: aws-greengrass/things/THING_NAME/ble/control/list
 Response Topic: aws-greengrass/things/THING_NAME/ble/control/list/response
 Error Response Topic: aws-greengrass/things/THING_NAME/ble/error
@@ -66,7 +66,7 @@ Sample Response:
   }
 }
 
-### Request BLE Scan
+### Request SCAN BLE Devices
 Publish Topic: aws-greengrass/things/THING_NAME/ble/control/scan
 Response Topic: aws-greengrass/things/THING_NAME/ble/control/scan/response
 Error Response Topic: aws-greengrass/things/THING_NAME/ble/error
@@ -106,8 +106,8 @@ Sample Response:
 ##### BLE device proxy Tx / Rx Messages
 ##############################################
 
-Publish Topic: aws-greengrass/things/THING_NAME/ble/tx/BLE_DEVICE_MAC
-Response Topic: aws-greengrass/things/THING_NAME/ble/rx/list/BLE_DEVICE_MAC
+Publish Topic: aws-greengrass/things/THING_NAME/ble/data/tx/BLE_DEVICE_MAC
+Response Topic: aws-greengrass/things/THING_NAME/ble/data/rx/BLE_DEVICE_MAC
 Error Response Topic: aws/greengrass/things/THING_NAME/ble/error
 
 The below BLE device command samples are supported by the ESP32 micropython sample code 

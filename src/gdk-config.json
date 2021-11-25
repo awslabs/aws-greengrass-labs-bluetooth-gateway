@@ -7,8 +7,8 @@
           "build_system" :"zip"
         },
         "publish": {
-          "bucket": "[S3_BUCKET_NAME]",
-          "region": "[AWS_REGION]"
+          "bucket": "aws-greengrass-components",
+          "region": "ap-southeast-2"
         }
       }
     },

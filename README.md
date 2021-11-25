@@ -8,9 +8,9 @@ Being comparatively short range (up to 100m), BLE devices are expected to connec
 a central controller such as mobiles or tablets to process information and act as a gateway to 
 applications and other services.  
 
-AWS Greengrass BLE Gateway component extends BLE communications within the local environment 
-securely across the Internet to connect BLE devices to the AWS cloud for Over-the-Internet control 
-and integration to AWS hosted ML, data, analytics and application services. 
+The AWS Greengrass Bluetooth Gateway component extends BLE communications within the local environment 
+securely across the Internet to the AWS cloud. This provides Over-the-Internet control and integration of local 
+BLE devices to AWS hosted ML, data, analytics and application services. 
 
 ![AWS Greengrass BLE Gateway Architecture](readme-assets/ble-gw-architecture.png)
 
@@ -40,11 +40,7 @@ BluePy is a Python module which allows communication with Bluetooth Low Energy d
 The current implementation runs on Linux (internally it uses code from the [BlueZ project](http://www.bluez.org/)), 
 although it can be ported to other platforms.  
 
-The AWS Greengrass BLE Gateway component should be deployed on a Linux based AWS Greengrass Core located within 
-range of the Bluetooth Low Energy devices. Once connected, the AWS Greengrass BLE Gateway component 
-provides a **CONTROL** channel for device state management and a **DATA** channel for sending and receiving 
-messages to the BLE Devices via the Greengrass core. By default, BLE messages are proxied to both MQTT and 
-IPC to support communications with applications and services in the AWS core as well as other Greengrass 
+The AWS Greengrass BLE Gateway component should be deployed on a Linux based AWS Greengrass Core wih supported BLE hardware located within range of the Bluetooth Low Energy peripheral devices. Once connected, the AWS Greengrass BLE Gateway component provides a **CONTROL** channel for device state management and a **DATA** channel for sending and receiving messages to the BLE Devices via the Greengrass core. By default, BLE messages are proxied to both MQTT and IPC to support communications with applications and services in the AWS core as well as other Greengrass 
 components on the same device.   
 
 ![BLE GW Control and Data Functions](readme-assets/ble-gw-control-data.png)
@@ -65,8 +61,8 @@ local Greengrass components.
 
 ![BLE GW Control Functions](readme-assets/ble-gw-control-function.png)
 
-**Base Control Topic:** aws-greengrass/things/THING_NAME/control/  
-**Error Response Topic:** aws-greengrass/things/THING_NAME/error/  
+**Base Control Topic:** aws-greengrass/things/THING_NAME/ble/control/  
+**Error Response Topic:** aws-greengrass/things/THING_NAME/ble/error/  
 
 #### BLE Device Connect:  
 
@@ -80,8 +76,8 @@ write this to a local shadow instead but in this initial release, you must monit
 **Note:** If the device doesn’t exist, it will continue to try for up to 30 seconds before returning a failed connection. 
 If the delay causes a problem for application logic then perform a scan first to ensure the device exists and is reachable.  
 
-**Connect Request Topic:** aws-greengrass/things/**THING_NAME**/control/connect  
-**Connect Response Topic:** aws-greengrass/things/**THING_NAME**/control/connect/response  
+**Connect Request Topic:** aws-greengrass/things/**THING_NAME**/ble/control/connect  
+**Connect Response Topic:** aws-greengrass/things/**THING_NAME**/ble/control/connect/response  
 
 **Message Format:**  
 ```
@@ -90,7 +86,7 @@ If the delay causes a problem for application logic then perform a scan first to
 }
 ```
 
-**Sample Response:**  
+**Sample Responses:**  
 ```
 {
     "status": 200,
@@ -106,8 +102,8 @@ If the delay causes a problem for application logic then perform a scan first to
 The BLE Device disconnect command instructs the AWS Greengrass BLE Gateway to terminate 
 the BLE connection if active and remove the BLE Device MAC from the locally maintained connected devices list.  
 
-**Connect Request Topic:** aws-greengrass/things/**THING_NAME**/control/disconnect  
-**Connect Response Topic:** aws-greengrass/things/**THING_NAME**/control/disconnect/response  
+**Connect Request Topic:** aws-greengrass/things/**THING_NAME**/ble/control/disconnect  
+**Connect Response Topic:** aws-greengrass/things/**THING_NAME**/ble/control/disconnect/response  
 
 **Message Format:**  
 ```
@@ -133,8 +129,8 @@ That is, all BLE devices that have received a connect command and not a subseque
 Don’t confuse this with the Scan function. List will only provide information on devices that 
 have had a connection request, scan will return information on all devices within range of the BLE gateway.  
 
-**Connect Request Topic:** aws-greengrass/things/**THING_NAME**/control/list  
-**Connect Response Topic:** aws-greengrass/things/**THING_NAME**/control/list/response  
+**Connect Request Topic:** aws-greengrass/things/**THING_NAME**/ble/control/list  
+**Connect Response Topic:** aws-greengrass/things/**THING_NAME**/ble/control/list/response  
 
 **Message:**
 ```
@@ -164,8 +160,8 @@ the BLE Complete Local Name (BLE Ad-Type: 9). In the ESP32 micro-python code sam
 set to **BLE_Device**. You can use these fields in your BLE devices to set a unique name that will 
 identify associated devices as needed.   
 
-**Connect Request Topic:** aws-greengrass/things/**THING_NAME**/control/scan  
-**Connect Response Topic:** aws-greengrass/things/**THING_NAME**/control/scan/response  
+**Connect Request Topic:** aws-greengrass/things/**THING_NAME**/ble/control/scan  
+**Connect Response Topic:** aws-greengrass/things/**THING_NAME**/ble/control/scan/response  
 
 **Message Format:**  
 ```
@@ -199,6 +195,21 @@ identify associated devices as needed.
   },
 .....
 ```
+
+### BLE Device Errors
+
+The BLE component will report errors to the BLE Error topic: **aws-greengrass/things/THING_NAME/ble/error**
+These are internal server type errors where an unexpected event occurred. Errors such as a BLE device failing to connect will report back to their respective response topics.
+The example below is in response to sending a message ```{'unsupported': 'command'}``` to the connect topic that only expects the 'ble-mac' field. 
+
+```
+{
+  "status": 500,
+  "error-message": "BLE CONTROL ROUTING KEY_ERROR: 'ble-mac' - TOPIC aws-greengrass/things/ble-gateway-3B/ble/control/connect - MESSAGE_OBJECT: {'unsupported': 'command'}"
+}
+```
+
+We recommend any testing or consuming applications subscribe to and monitor this error topic for unexpected events.
 
 ### AWS Greengrass BLE Gateway Component Data Functions
 
@@ -236,6 +247,14 @@ JSON format, for binary or blob data it is recommend to convert to base-64 and t
 * Knowledge of [AWS Greengrass Components](https://docs.aws.amazon.com/greengrass/v2/developerguide/create-components.html) and the [AWS Greengrass Developer Guide](https://docs.aws.amazon.com/greengrass/v2/developerguide).
 * AWS Greengrass Development Kit installed.
 
+### Device Dependancies:
+
+Ensure the Greengrass core device has Python3, python3-pip and python3-venv installed.
+
+i.e: To install on Debian based Distributions:
+sudo apt-get -y install python3-pip
+sudo apt-get install python3-venv
+
 ### Clone the AWS Greengrass Bluetooth Gateway Component
 
 ```
@@ -247,13 +266,11 @@ git clone https://github.com/awslabs/aws-greengrass-labs-bluetooth-gateway.git
 
 In this guide, we will deploy the AWS Greengrass Bluetooth Gateway Component to AWS IoT Core using the AWS Greengrass Deployment Kit (GDK). The AWS GDK is a simple command line tool to build and publish Greengrass components to the AWS IoT core. It can be downloaded and installed at: (TODO: waiting public reference).
 
-At this point in the workflow before publishing your component, you would normally expect to add your own application logic. However, the AWS GDK automatically manages versioning so we will first deploy this component in its default state and you can build on its functionality as needed. 
-
 * Update the AWS GDK config file. Open the src/gdk-config.json config file and update the below fields accordingly
 ```
 {
     "component" :{
-      "aws-greengrass-labs-bluetooth-gateway": {  # << Component name will be set to this value.
+      "aws-greengrass-labs-bluetooth-gateway": {  # << Component name - 
         "author": "Amazon",
         "version": "LATEST",
         "build": {
@@ -277,7 +294,8 @@ cd aws-greengrass-labs-bluetooth-gateway/src
 # Build the component:
 gdk component build -d
 
-# The above will create a greengrass-build and a zip-build directory with all of the files need to publish the component to the AWS Core.
+# The above will create a greengrass-build and a zip-build directory with all of the 
+# files need to publish the component to the AWS Core.
 
 # Publish the component to AWS Core:
 gdk component publish -d
@@ -299,27 +317,29 @@ The final step is to deploy the component to a registered AWS Greengrass Core:
 * Click **Revise**, **Next** then select the **aws-greengrass-labs-bluetooth-gateway** component
 * Click next leaving all fields default until the final page then click **Deploy**
 
-Note: You can monitor the deployment on the Greengrass core in the following logs:
+### Monitoring and Debugging the Component Deployment
+
+If there are any issues, you can monitor the deployment on the Greengrass core in the following logs:
 * **Greengrass Core Log:** /greengrass/v2/greengrass.log and 
 * **Greengrass Component Log:** /greengrass/v2/aws-greengrass-labs-bluetooth-gateway.log
 
 ### Validate the AWS Greengrass Bluetooth Gateway Component
 
 Assuming the AWS Greengrass Bluetooth Gateway Component has been successfully deployed to a registered AWS Greengrass device it will be listening for commands on the command topics: 
-* aws-greengrass/things/**THING_NAME**/control/connect
-* aws-greengrass/things/**THING_NAME**/control/disconnect
-* aws-greengrass/things/**THING_NAME**/control/list
-* aws-greengrass/things/**THING_NAME**/control/scan
+* aws-greengrass/things/**THING_NAME**/ble/control/connect
+* aws-greengrass/things/**THING_NAME**/ble/control/disconnect
+* aws-greengrass/things/**THING_NAME**/ble/control/list
+* aws-greengrass/things/**THING_NAME**/ble/control/scan
 
-In the AWS Console MQTT Test page, subscribe to: aws-greengrass/things/**THING_NAME**/control/#  
+In the AWS Console MQTT Test page, subscribe to: aws-greengrass/things/**THING_NAME**/ble/control/#  
 This will receive any control commands from the AWS Greengrass Bluetooth Gateway.
 
 If at this stage you don't have any suitable BLE devices to connect to, you can still run a **scan** and **list** operation to validate the functionality
 
-* **BLE Scan**: Publish an empty object '{}' to: aws-greengrass/things/**THING_NAME**/control/scan  
+* **BLE Scan**: Publish an empty object '{}' to: aws-greengrass/things/**THING_NAME**/ble/control/scan  
 After a 5 second scan, expect a response listing all of the advertising BLE devices withing range of the Greengrass BLE Gateway. 
 
-* **BLE List**: Publish an empty object '{}' to: aws-greengrass/things/**THING_NAME**/control/list  
+* **BLE List**: Publish an empty object '{}' to: aws-greengrass/things/**THING_NAME**/ble/control/list  
 Expect to receive an empty connected device list. 
 
 For connect and data operations, you need to connect to a valid BLE Peripheral Devices device. An example of this is shown in the following sections. 
@@ -376,12 +396,12 @@ Example:
   },
   ```
 
-  Record the Mac address of this device and send a connect command as described above. 
+Record the Mac address of this device and send a connect command as described above. And finally, you will be able to send the following commands to the BLE Peripheral and get a valid response on the IoT Things BLE Data topics.  
 
-  And finally, you will be able to send the following commands to the BLE Peripheral and get a valid response on the IoT Things BLE Data topics. 
+**Note:** More detail of the data commands are avaliable in [BLE-Test-Messages](/ble-test-messages.txt)
 
-**Publish Topic:** aws-greengrass/things/**THING_NAME**/ble/tx/**BLE_DEVICE_MAC**  
-**Response Topic:** aws-greengrass/things/**THING_NAME**/ble/rx/list/**BLE_DEVICE_MAC**
+**Publish Topic:** aws-greengrass/things/**THING_NAME**/ble/data/tx/**BLE_DEVICE_MAC**  
+**Response Topic:** aws-greengrass/things/**THING_NAME**/ble/data/rx/list/**BLE_DEVICE_MAC**
 
 1. Request Describe BLE Device message:
 ```

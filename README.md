@@ -273,7 +273,7 @@ In this guide, we will deploy the AWS Greengrass Bluetooth Gateway Component to 
     "component" :{
       "aws-greengrass-labs-bluetooth-gateway": {  # << Component name
         "author": "Amazon",
-        "version": "LATEST",
+        "version": "NEXT_PATCH",
         "build": {
           "build_system" :"zip"
         },
@@ -283,7 +283,7 @@ In this guide, we will deploy the AWS Greengrass Bluetooth Gateway Component to 
         }
       }
     },
-    "tools_version": "1.0.0"
+    "gdk_version": "1.0.0"
   }
 ```
 

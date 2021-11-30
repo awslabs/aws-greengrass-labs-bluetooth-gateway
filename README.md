@@ -264,7 +264,8 @@ git clone https://github.com/awslabs/aws-greengrass-labs-bluetooth-gateway.git
 
 ### Publish the AWS Greengrass Bluetooth Gateway Component
 
-In this guide, we will deploy the AWS Greengrass Bluetooth Gateway Component to AWS IoT Core using the AWS Greengrass Deployment Kit (GDK). The AWS GDK is a simple command line tool to build and publish Greengrass components to the AWS IoT core. It can be downloaded and installed at: (TODO: waiting public reference).
+In this guide, we will deploy the AWS Greengrass Bluetooth Gateway Component to AWS IoT Core using the AWS IoT Greengrass Development Kit (GDK). The AWS GDK is a simple command line tool to build and publish Greengrass components to the AWS IoT core. It can be downloaded and installed from the [aws-greengrass-gdk-cli](https://github.com/aws-greengrass/aws-greengrass-gdk-cli) repository. More information can be found in the [AWS IoT Greengrass Development Kit](https://docs.aws.amazon.com/greengrass/v2/developerguide/greengrass-development-kit-cli.html) section of the Iot Greengrass developers guide.   
+
 
 * Update the AWS GDK config file. Open the src/gdk-config.json config file and update the below fields accordingly
 ```

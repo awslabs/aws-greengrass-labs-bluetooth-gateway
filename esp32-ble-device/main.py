@@ -7,10 +7,10 @@ BLE connector component.
 
 '''
 
+__author__ = "Dean Colcott <https://www.linkedin.com/in/deancolcott/>"
+__copyright__ = "Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved."
 __version__ = "0.0.1"
 __status__ = "Development"
-__copyright__ = "Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved."
-__author__ = "Dean Colcott <https://www.linkedin.com/in/deancolcott/>"
 
 import esp32
 import uos
@@ -45,10 +45,6 @@ class ESP32_BLE_Processor():
             # Init the BleUartPeripheral
             self.ble_peripheral = BleUartPeripheral()
             self.ble_peripheral.irq(handler=self.ble_message_callback)
-
-            # TODO: Renmove, only for testing.
-            self.disable_stepper_pins()
-
 
         except ValueError as val_error: # includes JSON parsing errors
             err_msg =  'VAL_ERROR: Initialising ESP32 BLE Device. JSON Parsing Error / Unexpected message format. ERROR MESSAGE: {}'.format(val_error)
@@ -108,33 +104,6 @@ class ESP32_BLE_Processor():
         finally:
             gc.collect()
 
-    def disable_stepper_pins(self):
-        '''
-        This just to disable connected stepper motor during testing
-        '''
-
-        # Set the active/enabled parameter.
-        self.active_enable = 1
-
-        # Initilise stepper-motor controller pins
-        self.pin_enb = Pin(23, Pin.OUT)
-        self.pin_dir = Pin(22, Pin.OUT)
-        self.pin_step = Pin(21, Pin.OUT)
-        self.pin_led  = Pin(2, Pin.OUT)
-
-        # Init control pins to 0
-        self.pin_dir.value(0)
-        self.pin_step.value(0)
-        self.pin_led.value(0)
-
-        # Stepper controller has enable as well as power that needs 3.3v feed
-        # is opto-coupled so can run off a GPIO. Set pin and turn to on
-        self.pin_step_ctl_pwr = Pin(19, Pin.OUT)
-        self.pin_step_ctl_pwr.value(1)
-
-        # Disable Stepper until a command is received
-        self.pin_enb.value(not self.active_enable)
-
     ##########################################################
     # BLE Message Routers
     def ble_request_message_router(self, message):
@@ -154,6 +123,9 @@ class ESP32_BLE_Processor():
 
             elif command == 'get-processor-board-temp':
                 self.publish_board_temp()
+
+            elif command == 'reflect-message':
+                self.reflect_message(message)
 
             else:
                 err_msg = 'Unknown BLE Command: {} REQUEST received'.format(command)
@@ -235,6 +207,15 @@ class ESP32_BLE_Processor():
             err_msg = {'error-message' : 'EXCEPTION in publish_board_temp. ERROR MESSAGE {}'.format(err)}
             self.publish_exception(500, err_msg)
 
+    def reflect_message(self, message):
+        '''
+        Reflects the received BLE Message back to the gateway.
+        Like a Ping for BLE messages. Good to test BLE MEssage MTU on 
+        various HW as well. 
+        '''
+
+        self.publish_message(message)
+
     ##################################################
     ### BLE Message Publisher
     ##################################################
@@ -245,7 +226,7 @@ class ESP32_BLE_Processor():
         '''
 
         try:
-
+            message['ble-mac' ] = self.ble_peripheral.ble_mac
             self.ble_peripheral.write(message) 
         
         except Exception as err:
@@ -263,6 +244,7 @@ class ESP32_BLE_Processor():
 
         # Publish the error to BLE Controller for logging / handling
         err_message = {
+            "ble-mac" : self.ble_peripheral.ble_mac,
             "status" : error_status,
             "data" : {
                 "error-message" : error_message

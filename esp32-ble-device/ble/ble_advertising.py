@@ -8,7 +8,6 @@ Creates the BLE Advertising packet with manufacturer_specific ID.
 __author__ = "Dean Colcott <https://www.linkedin.com/in/deancolcott/>"
 __copyright__ = "Copyright Amazon.com, Inc. or its affiliates. All Rights Reserved."
 __version__ = "0.0.1"
-__email__ = "dean.colcott@gmail.com"
 __status__ = "Development"
 
 # Helpers for generating BLE advertising payloads.

@@ -92,8 +92,7 @@ class IpcTopicPubSub():
 
         if (topic in self.ipc_subscribed_topics):
             log.info('Already subscribed to IPC topic: {}'.format(topic))
-            data = {'topic' : topic, 'message' : 'Already subscribed to this IPC topic'}
-            return {'status': 200,  'data' : data}
+            return
 
         log.info('IPC subscribing to topic: {}'.format(topic))
         request = SubscribeToTopicRequest()

@@ -71,7 +71,7 @@ class BleUartPeripheral:
             self._rx_buffer = bytearray()
             self._handler = None
 
-            # Optionally add services=[_UART_UUID], but this is likely to make the payload too large.
+            # Optionally add services=[_UART_UUID], but this is possible to make the payload too large.
             self._payload = advertising_payload(name=ble_name, manufacturer_specific=ble_specific_id, appearance=_ADV_APPEARANCE_GENERIC_COMPUTER)
             self._advertise()
 
@@ -130,5 +130,5 @@ class BleUartPeripheral:
         self._connections.clear()
 
     def _advertise(self, interval_us=100000):
-        print("STARTED BLE ADVERTISMENT")
+        print('Starting BLE Advertisment from BLE Mac: {}'.format(self.ble_mac))
         self._ble.gap_advertise(interval_us, adv_data=self._payload)

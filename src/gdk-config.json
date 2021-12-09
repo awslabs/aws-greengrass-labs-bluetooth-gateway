@@ -1,16 +1,16 @@
 {
-    "component" :{
-      "aws-greengrass-labs-bluetooth-gateway": {
-        "author": "Amazon",
-        "version": "NEXT_PATCH",
-        "build": {
-          "build_system" :"zip"
-        },
-        "publish": {
-          "bucket": "[AWS_S3_BUCKET]",
-          "region": "[AWS_REGION]"
-        }
+  "component" :{
+    "aws-greengrass-labs-bluetooth-gateway": {
+      "author": "Amazon",
+      "version": "NEXT_PATCH",
+      "build": {
+        "build_system" :"zip"
+      },
+      "publish": {
+        "bucket": "[AWS_S3_BUCKET]",
+        "region": "[AWS_REGION]"
       }
-    },
-    "gdk_version": "1.0.0"
-  }
+    }
+  },
+  "gdk_version": "1.0.0"
+}

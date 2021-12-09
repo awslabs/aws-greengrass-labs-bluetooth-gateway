@@ -27,13 +27,14 @@ _UART_TX_CHAR_UUID = "6E400003-B5A3-F393-E0A9-E50E24DCCA9E"
 
 class BleUartPeripheral(Thread):
 
-    def __init__(self, ble_mac, ble_message_callback):
+    def __init__(self, ble_mac, receive_message_router, ble_state_change_callback):
 
         try:
-            log.info('Initialising BleUartPeripheral Device MAC: {}'.format(ble_mac))
 
-            # __init__ extended Thread class
+             # __init__ extended Thread class
             Thread.__init__(self)
+
+            log.info('Initialising BleUartPeripheral Device MAC: {}'.format(ble_mac))
 
             # create the TX queue
             self._tx_queue = Queue()
@@ -44,9 +45,15 @@ class BleUartPeripheral(Thread):
             # Normalise ble-mac to all upper case. 
             self.ble_mac = ble_mac.upper()
 
-            self.ble_message_callback = ble_message_callback
+            # Set the message callback for passing received Rx Ble Messages.
+            self.receive_message_router = receive_message_router
+
+            # Callback to message a change in connectivity state of this BLE Peripheral
+            self.ble_state_change_callback = ble_state_change_callback
 
             self.ble_proxy_topic = '$aws/greengrass/ble/do-proxy/{}'.format(self.ble_mac)
+
+            self._conn_state = { "connection-state": "waiting-init", "addr-type": "N/A" }
          
             log.info('Initialising BleUartPeripheral MAC: {} Complete'.format(self.ble_mac))
 
@@ -54,12 +61,20 @@ class BleUartPeripheral(Thread):
             log.error('Exception raised initialising BleUartPeripheral MAC: {} - ERROR MESSAGE: {}'.format(ble_mac, err))
             raise
 
-    def ble_init_connect(self):
+
+    def _ble_init_connect(self):
+        '''
+        Initilise the BLE connection to the Peripheral device
+        Note: Will disconect and kill any existing connections / Peripheral device objects.
+        '''
 
         try:
             # Create the BLE Peripheral device and configure 
             log.info('Connecting to BLE Device: {}'.format(self.ble_mac))
             
+            # Clear any previously initilised ble_peripheral (and updates connection state).
+            self._disconect_ble()
+
             # re/initialise the ble_peripheral and connect to the device
             self._ble_peripheral = btle.Peripheral(self.ble_mac)
             self._ble_peripheral.setMTU(5000)
@@ -79,55 +94,89 @@ class BleUartPeripheral(Thread):
             log.info('_uart_service Tx Characteristic: {}'.format(self._uart_tx))
 
             # Once the BLE Peripheral is initialised then add the RX Delegate. 
-            self._ble_peripheral.withDelegate(BleUartDelegate(self.ble_mac, self.ble_proxy_topic, self.ble_message_callback))
+            self._ble_peripheral.withDelegate(BleUartDelegate(self.ble_mac, self.ble_proxy_topic, self.receive_message_router))
+        
+        except Exception as err:
+            #  Log the failed BLE connection to this peripheral
+            log.info('EXCEPTION Connection state error for BLE device: {} - ERROR-MESSAGE: {}'.format(self.ble_mac, err))
 
-            # Set the initial connection state 
-            log.info('Getting the connection state for BLE device: {}'.format(self.ble_mac))
+        finally:
+            # Update the connection state variable and return
             self._set_ble_connection_state()
-            log.info('Connection state for BLE device: {} - {}'.format(self.ble_mac, self.conn_state))
+            log.info('Connection state for BLE device: {} - {}'.format(self.ble_mac, self._conn_state))
 
-            log.info('Connecting to BLE Device: {} Successful'.format(self.ble_mac))
+    def _set_ble_connection_state(self):
+        '''
+        Provides the connection state of this BLE device. Is private as BluePy is not thread safe
+        and any request to this method while the thread has an active Rx/Tx proces causes an exception / error.
+
+        If a state change is detected will update via the self.ble_state_change_callback()
+
+        Don't call this function from outside of this thread, it is called in the thread loop 
+        in a thread safe way and populates the self._conn_state variable. Access that via 
+        get_connection_state() instead or is_connected().
+        '''
+
+        try:
+            previous_state = self._conn_state.copy()
+
+            if hasattr(self,'_ble_peripheral') and self._ble_peripheral:
+                state = self._ble_peripheral.getState()
+                self._conn_state =  {'connection-state' : state, 'addr-type' : self._ble_peripheral.addrType}
+            else:
+                # Used 'disc' = disconnected to match getState() return from BluePy when its initilised
+                # https://github.com/IanHarvey/bluepy/blob/master/docs/peripheral.rst
+                self._conn_state =  {'connection-state' : 'disc', 'addr-type' : 'N/A'}
 
         except Exception as err:
-            log.error('Exception initialising / connecting BleUartPeripheral MAC: {} - ERROR MESSAGE: {}'.format(self.ble_mac, err))
-            raise
+            self._conn_state = {'connection-state' : 'error', 'state-request-error' : str(err)}
+        
+        finally:
+            # If connectivt=y state has changed, upfdate status callback.
+            if (previous_state != self._conn_state):
+                self.ble_state_change_callback(self.ble_mac, self._conn_state, previous_state)
 
-    def close_thread(self):
-        self.thread_running = False
-        self._ble_peripheral.disconnect()
+    def _disconect_ble(self):
+        '''
+        Gracefully disconnect the ble_peripheral. Call close_thread to shut down the entire thread opposed 
+        to just the BLE connection when acting from a public call.
+        '''
+        if hasattr(self,'_ble_peripheral') and self._ble_peripheral:
+            log.info('Disconnecting BLE connection on peripheral Mac: {}'.format(self.ble_mac))
+            self._ble_peripheral.disconnect()
+        
+        self._ble_peripheral = None
+        self._set_ble_connection_state()
+
+    def is_connected(self):
+        return self._conn_state['connection-state'] == 'conn'
 
     def get_connection_state(self):
         '''
-        Returns last update of this devuces conectio state in a thread safe way 
-        that doesn't interact with the BLE device itself. 
+        Returns last update of this BLE Peripheral device conection state in a thread safe way 
+        that doesn't interact with the BLE Peripheral connection itself.
         '''
-        return self.conn_state
+        return self._conn_state
     
-    def _set_ble_connection_state(self):
-        '''
-        Provides the connection state of this BLE device. Is private as BluePy is not thread safe (at all!)
-        and any request to this method while the thread has an active Rx/Tx loop causes the devices to lock up.
-
-        DO NOT call this function from outside of this thread, it is called in the thread loop 
-        in a thread safe way and populates the self.conn_state variable. Access that via 
-        get_connection_state() instead.
-        '''
-        
-        try:
-            state = self._ble_peripheral.getState()
-            self.conn_state =  {'connection-state' : state, 'addr-type' : self._ble_peripheral.addrType}
-        
-        except Exception as err:
-            self.conn_state = {'connection-state' : 'error', 'state-request-error' : str(err)}
+    def close_thread(self):
+        self.thread_running = False
 
     def run(self):
-        # Note: Bluepy is not thread safe so can't run Rx loop in a seperate thread. Need to Rx and Tx sequentially
-        # Have set Rx timeout low (0.1 secs) to avoid long delays. Not ideal, needs uppler layers to validate responses.
+        # Note: Bluepy is not thread safe so can't run Rx loop in a seperate thread. Need to Rx and Tx sequentially.
+        # Also can't safely poll connection state during read / write operations
+        # Have set Rx timeout low (0.1 secs) to avoid long delays.
+
+        # Initilie the BLE Peripheral connection. 
+        log.info('Rx/Tx thread started for BLE Device: {}, initilising connection.....'.format(self.ble_mac))
+        self._ble_init_connect()
+
         while self.thread_running:
+
             try:
 
-                ## Transmit any messages in queue
-                while not self._tx_queue.empty():
+                #############################################
+                ## Transmit BLE messages
+                while not self._tx_queue.empty() and self.thread_running:
 
                     # Parse and send messages in queue
                     tx_object = self._tx_queue.get_nowait()
@@ -139,15 +188,29 @@ class BleUartPeripheral(Thread):
                     payload_bytes = bytes(json_message.encode('utf-8'))
                     self._uart_rx.write(payload_bytes, with_ble_response)
 
-                ## Receive notification
-                self._ble_peripheral.waitForNotifications(0.1)
+                #############################################
+                ## Receive BLE messages - handled by BleUartDelegate (callbacks)
+                if self.thread_running:
+                    self._ble_peripheral.waitForNotifications(0.1)
 
+            #############################################
+            ## Catch Rx/Tx exceptions, mostly expected due to lost BLE connection.
             except Exception as err:
-                # On exception try and re-initilise the BLE device connection. 
-                log.error('EXCEPTION: BLE Publish - attempt to reconnect ERROR: {}'.format(err))
-                self._set_ble_connection_state()
-                self._ble_peripheral.disconnect()
-                self.ble_init_connect()
+                # If thread still running, attempt to re-initilise the BLE device connection
+                if (self.thread_running):
+                    log.error('BLE Mac {} error: {} - attempting to reconnect.'.format(self.ble_mac, err))
+                    
+                    # Give time for the BLE device to disconnect and start re-advertsing beacon 
+                    # also prevents fast exceptions loops when device is not reachable.
+                    self._disconect_ble()
+                    time.sleep(5)
+
+                    # Attempt to reconnect.
+                    self._ble_init_connect()
+
+        # Clear the BLE connection if leaving the running thread.
+        self._disconect_ble()
+        log.info('Exiting the BLE Peripheral Rx/Tx process loop for BLE Mac: {}'.format(self.ble_mac))
 
     def publish_to_ble(self, message_object, with_ble_response=True):
         '''
@@ -170,7 +233,7 @@ class BleUartPeripheral(Thread):
 
 class BleUartDelegate(btle.DefaultDelegate):
 
-    def __init__(self, ble_mac, ble_proxy_topic, ble_message_callback):
+    def __init__(self, ble_mac, ble_proxy_topic, receive_message_router):
 
         btle.DefaultDelegate.__init__(self)
         
@@ -179,17 +242,17 @@ class BleUartDelegate(btle.DefaultDelegate):
         self.ble_proxy_topic = ble_proxy_topic
 
         # Main process BLE message callback / processor
-        self.ble_message_callback = ble_message_callback
+        self.receive_message_router = receive_message_router
         
     def handleNotification(self, cHandle, data):
         
         try:
-            log.debug('BLE NOTIFICATION RECEIVED: {}'.format(data))
+            log.debug('BLE Notification Received: {}'.format(data))
 
-            # Decode the Bytes to JSON String and pass to ble_message_callback
+            # Decode the Bytes to JSON String and pass to receive_message_router
             # To match the PubSub design assign a simulate BLE topic
             json_str = data.decode("utf-8", "ignore")
-            self.ble_message_callback(self.ble_proxy_topic, json_str)
+            self.receive_message_router(self.ble_proxy_topic, json_str)
 
         except Exception as err:
             log.error('Exception raised in BleUartDelegate handleNotification MAC: {} - ERROR MESSAGE: {}'.format(self.ble_mac, err))

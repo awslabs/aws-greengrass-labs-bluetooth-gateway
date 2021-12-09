@@ -17,6 +17,7 @@ import sys
 import json
 import time
 import logging
+from datetime import datetime
 
 from ipc_pubsub.ipc_topic_pubsub import IpcTopicPubSub
 from ipc_pubsub.mqtt_core_pubsub import MqttCorePubSub
@@ -51,14 +52,9 @@ class AwsGreengrassV2BleComponent():
 
             self.ipc_pubsub_timeout = ggv2_component_config['ipc_pubsub_timeout']
             self.mqtt_pubsub_timeout = ggv2_component_config['mqtt_pubsub_timeout']
-            
-            # TODO: Delete. Below just for debug / testing when no config passed. 
-            #self.ipc_pubsub_timeout = 10
-            #self.mqtt_pubsub_timeout = 10
 
             # Completed processing recipe driven config for the Greengrass application.
             log.info('Parsing AWS Greengrass V2 Config Complete.')
-
 
             #######################################################
             # Initilise BLE control and data MQTT/IPC topics
@@ -68,6 +64,8 @@ class AwsGreengrassV2BleComponent():
 
             self.pubsub_control_topic = '{}/control'.format(self.pubsub_thing_topic)
             self.pubsub_data_topic = '{}/data'.format(self.pubsub_thing_topic)
+            self.pubsub_ble_state_topic = '{}/state'.format(self.pubsub_thing_topic)
+            self.pubsub_error_topic = '{}/error'.format(self.pubsub_thing_topic)
 
             # Rx / TX topics for proxying BLE <-> IPC / MQTT. 
             # Uses cloud perspective. i.e: TX is cloud >-tx-> to BLE. RX is cloud <-rx-< from BLE
@@ -87,9 +85,8 @@ class AwsGreengrassV2BleComponent():
             self.ble_scan_topic = '{}/scan'.format(self.pubsub_control_topic)
             self.ble_scan_response_topic = '{}/response'.format(self.ble_scan_topic)
 
-            self.pubsub_error_topic = '{}/error'.format(self.pubsub_thing_topic)
 
-            self.ble_control_pub_topics = [self.ble_connect_response_topic, self.ble_disconnect_response_topic, self.ble_list_response_topic, self.ble_scan_response_topic, self.pubsub_error_topic]
+            self.ble_control_pub_topics = [self.ble_connect_response_topic, self.ble_disconnect_response_topic, self.ble_list_response_topic, self.ble_scan_response_topic, self.pubsub_ble_state_topic, self.pubsub_error_topic]
             self.ble_control_sub_topics = [self.ble_connect_topic, self.ble_disconnect_topic, self.ble_list_topic, self.ble_scan_topic]
 
             log.info('BLE Control Publish Topics: {}'.format(self.ble_control_pub_topics))
@@ -99,7 +96,7 @@ class AwsGreengrassV2BleComponent():
 
             #######################################################
             # Initilise internal BLE proxy topic to pass BLE messages into the message routing / processing methods
-            # Note: Don not expose this externally, is ony for internal BLE to PubSub proxy identification.
+            # Note: Don't expose this externally, is ony for internal BLE to PubSub proxy identification.
             self.ble_proxy_topic = '$aws/greengrass/ble/do-proxy/'
 
             #######################################################
@@ -115,7 +112,7 @@ class AwsGreengrassV2BleComponent():
             # Init the Bluetooth Low Energy (BLE) message controller
             log.info('Initialising Bluetooth BLE Discovery and Control service')
             self.ble_scanner = BleScanner()
-            self.ble_controller = BleUartController(self.receive_message_router)
+            self.ble_controller = BleUartController(self.receive_message_router, self.ble_state_change_callback)
             log.info('Initialising Bluetooth BLE Discovery and Control service Complete')
 
             log.info('Initialising AWS Greengrass V2 BLE Gateway Component complete!')
@@ -179,7 +176,7 @@ class AwsGreengrassV2BleComponent():
                 raise Exception('Received mesage on unknown / unsupported topic.')
 
         except Exception as err:
-            msg = 'MESSAGE CALLBACK EXCEPTION: {} - TOPIC {} - PAYLOAD: {}'.format(err, topic, payload)
+            msg = 'Message Callback Exception: {} - Topic {} - Payload: {}'.format(err, topic, payload)
             log.error(msg)
             self.publish_error(500, msg)
 
@@ -187,7 +184,7 @@ class AwsGreengrassV2BleComponent():
     ### PubSub BLE Control Message Router and Processors
     ##################################################
 
-    def pubsub_control_router(self, topic, message_object):
+    def pubsub_control_router(self, topic, message):
         '''
         Route BLE Control messages such as Connect, Disconnect amd List BLE Devices
         Topic expected format 'aws-greengrass/things/THING_NAME/ble/control/CONTROL_COMMAND' as per pubsub_control_topic
@@ -197,20 +194,20 @@ class AwsGreengrassV2BleComponent():
             topic_split = topic.split('/')
 
             if not len(topic_split) == 6:
-                raise Exception('Received BLE control command on unsupported topic structure')
+                raise Exception('Received BLE control command with unsupported topic structure')
             
             control_command = topic_split[5]
 
-            log.debug('RECEIVED BLE CONTROL MESSAGE Topic: {} -  Control Command: {}, Payload: {}'.format(topic, control_command, message_object))
+            log.debug('Received BLE Control Message Topic: {} -  Control Command: {}, Message: {}'.format(topic, control_command, message))
 
             if control_command == 'connect':
                 # Get the expected BLE MAC address in a connect control message
-                ble_mac = message_object['ble-mac']
+                ble_mac = message['ble-mac']
                 self.connect_ble_device(ble_mac)
 
             elif control_command == 'disconnect':
                 # Get the expected BLE MAC address in a disconnect control message
-                ble_mac = message_object['ble-mac']
+                ble_mac = message['ble-mac']
                 self.disconnect_ble_device(ble_mac)
 
             elif control_command == 'list':
@@ -220,20 +217,20 @@ class AwsGreengrassV2BleComponent():
                 self.scan_ble_devices()
             
             else:
-                raise Exception('Received unknown BLE Control Message Topic')
+                raise Exception('Received message on unknown BLE Gateway Control Topic')
 
         except ValueError as val_error: # includes JSON parsing errors
-            msg = 'BLE CONTROL ROUTING VAL_ERROR: {} - TOPIC {} - MESSAGE_OBJECT: {}'.format(val_error, topic, message_object)
+            msg = 'BLE Control Routing VAL_ERROR: {} - Topic {} - Message: {}'.format(val_error, topic, message)
             log.error(msg)
             self.publish_error(500, msg)
 
         except KeyError as key_error: # includes requests for fields that don't exist
-            msg = 'BLE CONTROL ROUTING KEY_ERROR: {} - TOPIC {} - MESSAGE_OBJECT: {}'.format(key_error, topic, message_object)
+            msg = 'BLE Control Routing KEY_ERROR: {} - Topic {} - Message: {}'.format(key_error, topic, message)
             log.error(msg)
             self.publish_error(500, msg)
 
         except Exception as err:
-            msg = 'BLE CONTROL ROUTING EXCEPTION: {} - TOPIC {} - MESSAGE_OBJECT: {}'.format(err, topic, message_object)
+            msg = 'BLE Control Routing EXCEPTION: {} - Topic {} - Message: {}'.format(err, topic, message)
             log.error(msg)
             self.publish_error(500, msg)
 
@@ -241,25 +238,24 @@ class AwsGreengrassV2BleComponent():
 
         try:
 
-            log.info('CONNECTING TO BLE_MAC: {}'.format(ble_mac))
-            connect_response = self.ble_controller.connect_ble_device(ble_mac)
-            log.info('BLE CONNECT RESPONSE: {}'.format(connect_response))
+            self.ble_controller.connect_ble_device(ble_mac)
 
-            # If the connect attemp was successful, subscribe to the BLE devices TX IPC / MQTT topic. 
-            if connect_response['status'] == 200:
-                ble_tx_topic = '{}/{}'.format(self.pubsub_data_tx_topic, ble_mac)
-                ipc_subscribe_response = self.ipc_topic_pubsub.subscribe_to_topic(ble_tx_topic)
-                mqtt_subscribe_response = self.mqtt_core_pubsub.subscribe_to_topic(ble_tx_topic)
-                log.info(ipc_subscribe_response)
-                log.info(mqtt_subscribe_response)
+            # Publish message to confirm connectio nis processing to ble/control/connect/response topic
+            # Actual connection will async publish any state changes to /ble/control/status
+            connect_response = {
+                "status": 200,
+                "data": {
+                    "ble-mac": ble_mac,
+                    "connect_status": "request-accepted"
+                }
+            }
 
-            # Publish respnse to IPC and MQTT
-            # TODO: Make IPC and MQTT selectable via config
+            # Publish response to IPC and MQTT
             self.publish_message('ipc', connect_response, topic=self.ble_connect_response_topic)
             self.publish_message('mqtt', connect_response, topic=self.ble_connect_response_topic)
 
         except Exception as err:
-            msg = 'BLE CONNECT EXCEPTION: {} - BLE DEVICE: {}'.format(err, ble_mac)
+            msg = 'BLE Device: {} - Connect Error: {}'.format(ble_mac, err)
             log.error(msg)
             self.publish_error(500, msg)
 
@@ -267,17 +263,24 @@ class AwsGreengrassV2BleComponent():
 
         try:
 
-            log.info('DISCONNECTING FROM BLE_MAC: {}'.format(ble_mac))
-            disconnect_response = self.ble_controller.disconnect_ble_device(ble_mac)
-            log.info('DISCONNECT RESPONSE: {}'.format(disconnect_response))
+            self.ble_controller.disconnect_ble_device(ble_mac)
 
-            # Publish respnse to IPC and MQTT
-            # TODO: Make IPC and MQTT selectable via config
+            # Publish message to confirm disconnection attempt is processing to ble/control/disconnect/response topic
+            # Actual connection status will async publish any state changes to /ble/control/status
+            disconnect_response = {
+                "status": 200,
+                "data": {
+                    "ble-mac": ble_mac,
+                    "disconnect_status": "request-accepted"
+                }
+            }
+
+            # Publish response to IPC and MQTT
             self.publish_message('ipc', disconnect_response, topic=self.ble_disconnect_response_topic)
             self.publish_message('mqtt', disconnect_response, topic=self.ble_disconnect_response_topic)
 
         except Exception as err:
-            msg = 'BLE DISCONNECT EXCEPTION: {} - BLE DEVICE: {}'.format(err, ble_mac)
+            msg = 'BLE Device: {} - Disconnect Error: {}'.format(ble_mac, err)
             log.error(msg)
             self.publish_error(500, msg)
     
@@ -285,17 +288,16 @@ class AwsGreengrassV2BleComponent():
 
         try:
 
-            log.info('DEVICE LIST REQUESTED')
+            log.info('Device List Requested')
             device_list_response = self.ble_controller.get_active_ble_devices()
-            log.info('DEVICE LIST RESPONSE: {}'.format(device_list_response))
+            log.info('Device List Response: {}'.format(device_list_response))
 
-            # Publish respnse to IPC and MQTT
-            # TODO: Make IPC and MQTT selectable via config
+            # Publish response to IPC and MQTT
             self.publish_message('ipc', device_list_response, topic=self.ble_list_response_topic)
             self.publish_message('mqtt', device_list_response, topic=self.ble_list_response_topic)
 
         except Exception as err:
-            msg = 'BLE DEVICE LIST EXCEPTION: {}'.format(err)
+            msg = 'BLE Device List Request Error: {}'.format(err)
             log.error(msg)
             self.publish_error(500, msg)
 
@@ -303,17 +305,16 @@ class AwsGreengrassV2BleComponent():
 
         try:
 
-            log.info('SCAN BLE DEVICES REQUESTED')
+            log.info('BLE Scan Requested')
             device_scan_response = self.ble_scanner.scan_ble_devices(5)
-            log.info('SCAN BLE DEVICES RESPONSE: {}'.format(device_scan_response))
+            log.info('Ble Scan Response: {}'.format(device_scan_response))
 
             # Publish respnse to IPC and MQTT
-            # TODO: Make IPC and MQTT selectable via config
             self.publish_message('ipc', device_scan_response, topic=self.ble_scan_response_topic)
             self.publish_message('mqtt', device_scan_response, topic=self.ble_scan_response_topic)
 
         except Exception as err:
-            msg = 'BLE DEVICE LIST EXCEPTION: {}'.format(err)
+            msg = 'BLE Device Scan Request Error: {}'.format(err)
             log.error(msg)
             self.publish_error(500, msg)
 
@@ -372,7 +373,7 @@ class AwsGreengrassV2BleComponent():
 
     def get_validate_topic_mac(self, topic, element_number):
         '''
-        A simple helper to exract and validate MAC adresses from PubSub topics.
+        A simple helper to extract and validate MAC adresses from PubSub topics.
         '''
         topic_split = topic.split('/')
 
@@ -389,6 +390,38 @@ class AwsGreengrassV2BleComponent():
 
         # If all validation passed, return MAC address taken from topic element requested.
         return topic_mac
+
+    ##################################################
+    ### BLE State Change / Control Message Callbacks
+    ##################################################
+    def ble_state_change_callback(self, ble_mac, current_state, previous_state):
+
+        try:
+            # If transitioning to a conected state, subscribe to the BLE devices TX IPC / MQTT topic.
+            # if this connection has bounced, the subscribe function will gracefully ignore duplicate subscriptions.
+            if self.ble_controller.is_peripheral_connected(ble_mac):
+                log.info('BLE MAc: {} State Change to connected, subscribing to TX Topics.'.format(ble_mac))
+                ble_tx_topic = '{}/{}'.format(self.pubsub_data_tx_topic, ble_mac)
+                self.ipc_topic_pubsub.subscribe_to_topic(ble_tx_topic)
+                self.mqtt_core_pubsub.subscribe_to_topic(ble_tx_topic)
+
+            status_update = {
+                "control-command" : "ble-conection-state-changed",
+                "ble-mac" : ble_mac, 
+                "updated" : datetime.now().strftime("%Y%m%d%H%M%S%f"),
+                "data" : { 
+                    "previous-state" : previous_state,
+                    "current_state" : current_state,
+                }
+            }
+
+            self.publish_message('ipc', status_update, topic=self.pubsub_ble_state_topic)
+            self.publish_message('mqtt', status_update, topic=self.pubsub_ble_state_topic)
+
+        except Exception as err:
+            msg = 'BLE Mac: {} State Change ERROR: {}'.format(ble_mac, err)
+            log.error(msg)
+            self.publish_error(500, msg)
 
     ##################################################
     ### PubSub / BLE Message Publisher

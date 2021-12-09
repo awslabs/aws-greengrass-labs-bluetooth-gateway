@@ -12,7 +12,7 @@
 ### Request CONNECT BLE device:
 Publish Topic: aws-greengrass/things/THING_NAME/ble/control/connect
 Response Topic: aws-greengrass/things/THING_NAME/ble/control/connect/response
-Error Response Topic: aws-greengrass/things//THING_NAME/ble/error
+Error Response Topic: aws-greengrass/things/THING_NAME/ble/error
 
 Message: 
 {
@@ -118,17 +118,26 @@ to provide a response or action the request on the uController.
   "command" : "describe-ble-device"
 }
 
-2. Toggle LED:
+2. Request entire message is reflected / returned in RX Data Topic (good to test latency and MTU).
+{
+  "command" : "reflect-message",
+  "data" : {
+    "Message 01" : "Some Data Message",
+    "Message 02" : "Some Other Data Message"
+  }
+}
+
+3. Toggle LED:
 {
   "command" : "toggle_led"
 }
 
-2. Request BLE Device Processor Board Temperature
+4. Request BLE Device Processor Board Temperature
 {
   "command" : "get-processor-board-temp"
 }
 
-4. Request a HW reset of the BLE devices. 
+5. Request a HW reset of the BLE devices. 
 {
   "command" : "hw-reset-micro"
 }

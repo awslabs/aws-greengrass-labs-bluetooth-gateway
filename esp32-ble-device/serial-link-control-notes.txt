@@ -1,0 +1,54 @@
+### Raspberry Pi USB connection to ESP32 Serial and Flash control
+###
+
+## Serial Terminal using SCREEN
+
+## To connect to serial interface (assuming ESP connect to Pi USB)
+# Note: May need to press boot button to get the terminal
+screen /dev/ttyUSB0 115200
+
+# Note: On Mac or linux the serial tty interface will be different.
+# i.e: On mac: /dev/cu.SLAB_USBtoUART
+
+# to Exit Screen session
+ctl a, d
+
+# To view active / detacted screen sessions 
+screen -ls
+
+# To reconect a Screen session
+screen -r [SCREEN SESSION ID]
+
+## Erase FLASH and load Micropython using ESPTOOL
+
+## To erase flash
+## Note: press both power and boot buttons together once requestng connection begins
+esptool.py --port /dev/ttyUSB0 erase_flash 
+
+# To load new Micropythin version:
+# Note: Don't click the boot button. should make the connection after a few seconds.
+cd [to dir with uPy imaage]
+esptool.py --chip esp32 --port /dev/ttyUSB0 write_flash -z 0x1000 esp32-20210902-v1.17.bin
+
+## To access Flash as mounted directory using RSHELL
+rshell -p /dev/ttyUSB0
+
+# ESP32 Flash will be mounted at /pyboard
+
+# To see ESP32 loaded files
+ls -l /pyboard
+
+# To delete, move, etc just as normal file system
+rm /pyboard/some-file
+mv /pyboard/some-file
+
+# or can cd into the directory
+cd /pyboard
+
+# To upload ESP32 code just copy as mormal
+cd esp32-ble-peripheral
+cp main.py /pyboard
+cp -r ble /pyboard
+
+# To exit RSHELL
+ctl a, \

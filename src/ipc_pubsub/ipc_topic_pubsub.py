@@ -30,11 +30,9 @@ from awsiot.greengrasscoreipc.model import (
     PublishToTopicRequest,
     SubscribeToTopicRequest,
     SubscriptionResponseMessage,
-    IoTCoreMessage,
     PublishMessage,
     BinaryMessage,
-    UnauthorizedError,
-    QOS
+    UnauthorizedError
 )
 
 # Init the logger.
@@ -56,22 +54,25 @@ class IpcTopicPubSub():
             # PubSub message callback.
             self.message_callback = message_callback
 
-            # IPC Subscribe Topics
+            # IPC Subscribe Topics.
             self.ipc_subscribe_topics = ipc_subscribe_topics
 
-            # Create the ipc_clients
+            # List of active topics subscribed too.
+            self.ipc_subscribed_topics = []
+
+            # Create the ipc_clients.
             self.ipc_subscribe_client = awsiot.greengrasscoreipc.connect()
             self.ipc_publish_client = awsiot.greengrasscoreipc.connect()
 
             # Create ThreadPoolExecutor to process PubSub messages.
-            # Changed in version 3.8: Default max_workers changed to min(32, os.cpu_count() + 4)
+            # Changed in version 3.8: Default max_workers changed to min(32, os.cpu_count() + 4).
             self.executor = ThreadPoolExecutor(max_workers=None)
 
-            # Init IPC PubSub's
+            # Init IPC PubSub's.
             self.init_topic_subscriber()
             self.init_topic_publisher()
 
-        except InterruptedError as iErr: # pragma: no cover 
+        except InterruptedError as iErr: # pragma: no cover
             log.error('INTERRUPTED_EXCEPTION: IPC Topic Publisher / Subscriber init was interrupted. ERROR MESSAGE: {}'.format(iErr))
 
         except Exception as err: # pragma: no cover 
@@ -89,33 +90,23 @@ class IpcTopicPubSub():
 
     def subscribe_to_topic(self, topic):
 
-        try:
-            log.info('IPC subscribing to topic: {}'.format(topic))
-            request = SubscribeToTopicRequest()
-            request.topic = topic
-            handler = IpcTopicPubSub.TopicSubscriber(self.message_callback, topic, self.executor)
-            operation = self.ipc_subscribe_client.new_subscribe_to_topic(handler)
-            future = operation.activate(request)
-            # call the result to ensure the future has completed.
-            future.result(self.ipc_timeout)
-            log.info('Complete IPC subscribing to topic: {}'.format(topic))
+        if (topic in self.ipc_subscribed_topics):
+            log.info('Already subscribed to IPC topic: {}'.format(topic))
+            data = {'topic' : topic, 'message' : 'Already subscribed to this IPC topic'}
+            return {'status': 200,  'data' : data}
 
-            return {'status': 200,  'data' : {'topic' : topic, 'message' : 'IPC Subscribe to topic successful'}}
+        log.info('IPC subscribing to topic: {}'.format(topic))
+        request = SubscribeToTopicRequest()
+        request.topic = topic
+        handler = IpcTopicPubSub.TopicSubscriber(self.message_callback, topic, self.executor)
+        operation = self.ipc_subscribe_client.new_subscribe_to_topic(handler)
+        future = operation.activate(request)
+        # call the result to ensure the future has completed.
+        future.result(self.ipc_timeout)
+        log.info('Complete IPC subscribing to topic: {}'.format(topic))
 
-        except concurrent.futures.TimeoutError as e: # pragma: no cover 
-            msg = 'TIMEOUT_ERROR: Timeout occurred while subscribing to IPC topic. ERROR MESSAGE: {} -  TOPIC {}'.format(e, topic)
-            log.error(msg)
-            return {'status': 500,  'data' : {'topic' : topic, 'message' : msg}}
-
-        except UnauthorizedError as e: # pragma: no cover 
-            msg = 'UNATHORIZED_ERROR: Unauthorized error while subscribing to IPC topic. ERROR MESSAGE: {} -  TOPIC {}'.format(e, topic)
-            log.error(msg)
-            return {'status': 500,  'data' : {'topic' : topic, 'message' : msg}}
-
-        except Exception as e: # pragma: no cover 
-            msg = 'EXCEPTION: Exception while subscribing to IPC topic. ERROR MESSAGE: {} -  TOPIC {}'.format(e, topic)
-            log.error(msg)
-            return {'status': 500,  'data' : {'topic' : topic, 'message' : msg}}
+        self.ipc_subscribed_topics.append(topic)
+        log.info('Complete IPC subscribing to topic: {}'.format(topic))
 
     def init_topic_publisher(self):
         '''

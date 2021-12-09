@@ -55,20 +55,23 @@ class MqttCorePubSub():
             # MQTT Subscribe Topics
             self.mqtt_subscribe_topics = mqtt_subscribe_topics
 
+            # List of active topics subscribed too.
+            self.mqtt_subscribed_topics = []
+
             # Create the mqtt_clients
             self.mqtt_subscribe_client = awsiot.greengrasscoreipc.connect()
             self.mqtt_publish_client = awsiot.greengrasscoreipc.connect()
 
             # Init MQTT PubSub's
-            self.mqtt_qos = QOS.AT_LEAST_ONCE   ## TODO - Paramaterise this into config
+            self.mqtt_qos = QOS.AT_MOST_ONCE
             self.init_mqtt_subscriber()
             self.init_mqtt_publisher()
 
         except InterruptedError as iErr: # pragma: no cover 
-            log.exception('INTERRUPTED_EXCEPTION: MQTT Iot Core Publisher / Subscriber init was interrupted. ERROR MESSAGE: {}'.format(iErr))
+            log.error('INTERRUPTED_EXCEPTION: MQTT IoT Core Publisher / Subscriber init was interrupted. ERROR MESSAGE: {}'.format(iErr))
 
         except Exception as err: # pragma: no cover 
-            log.exception('EXCEPTION: Exception occurred initialising AWS Greengrass IPC MQTT Core PubSub. ERROR MESSAGE: {}'.format(err))
+            log.error('EXCEPTION: Exception occurred initialising AWS Greengrass IPC MQTT Core PubSub. ERROR MESSAGE: {}'.format(err))
 
     ###############################################
     # IPC MQTT Iot Core PubSub Functions
@@ -81,36 +84,28 @@ class MqttCorePubSub():
 
         for subscribe_topic in self.mqtt_subscribe_topics:
             self.subscribe_to_topic(subscribe_topic)
+    
 
     def subscribe_to_topic(self, topic):
 
-        try:
-            log.info('MQTT subscribing to topic: {}'.format(topic))
-            request = SubscribeToIoTCoreRequest()
-            request.topic_name = topic
-            request.qos = self.mqtt_qos
-            operation = self.mqtt_subscribe_client.new_subscribe_to_iot_core(self.handler)
-            future = operation.activate(request)
-            # call the result to ensure the future has completed.
-            future.result(self.mqtt_timeout)
-            log.info('Complete MQTT subscribing to topic: {}'.format(topic))
+        log.info('MQTT subscribing to topic: {}'.format(topic))
 
-            return {'status': 200,  'data' : {'topic' : topic, 'message' : 'MQTT Subscribe to topic successful'}}
+        # If already subscribed just log and return.
+        if (topic in self.mqtt_subscribed_topics):
+            log.info('Already subscribed to MQTT topic: {}'.format(topic))
+            return
+        
+        request = SubscribeToIoTCoreRequest()
+        request.topic_name = topic
+        request.qos = self.mqtt_qos
+        operation = self.mqtt_subscribe_client.new_subscribe_to_iot_core(self.handler)
+        future = operation.activate(request)
+        # call the result to block until the future has completed.
+        future.result(self.mqtt_timeout)
 
-        except concurrent.futures.TimeoutError as e: # pragma: no cover 
-            msg = 'TIMEOUT_ERROR: Timeout occurred while subscribing to IPC MQTT topic. ERROR MESSAGE: {} - TOPIC {}'.format(e, topic)
-            log.error(msg)
-            return {'status': 500,  'data' : {'topic' : topic, 'message' : msg}}
+        self.mqtt_subscribed_topics.append(topic)
+        log.info('Complete MQTT subscribing to topic: {}'.format(topic))
 
-        except UnauthorizedError as e: # pragma: no cover 
-            msg = 'UNATHORIZED_ERROR: Unauthorized error while subscribing to IPC MQTT topic. ERROR MESSAGE: {} - TOPIC: {}'.format(e, topic)
-            log.error(msg)
-            return {'status': 500,  'data' : {'topic' : topic, 'message' : msg}}
-
-        except Exception as e: # pragma: no cover 
-            msg = 'EXCEPTION: Exception while subscribing to IPC MQTT topic. ERROR MESSAGE: {} - TOPIC: {}'.format(e, topic)
-            log.error(msg)
-            return {'status': 500,  'data' : {'topic' : topic, 'message' : msg}}
 
     def init_mqtt_publisher(self):
         '''

@@ -64,6 +64,52 @@ local Greengrass components.
 **Base Control Topic:** aws-greengrass/things/THING_NAME/ble/control/  
 **Error Response Topic:** aws-greengrass/things/THING_NAME/ble/error/  
 
+#### BLE Device State Transition Topic and Connection Workflow
+
+The AWS Greengrass Bluetooth (BLE) IoT Gateway manages the connection state of BLE devices that have received a connect request as 
+determined by thier MAC address. To connect or disconnect from a BLE device, publish the required message to the 
+connect and disconnect control topics respectiovly as described in the following sections. 
+
+Once a connect attempt has been requested, the AWS Greengrass Bluetooth (BLE) IoT Gateway will either successfully connect
+or continue re-trying the connection every 5 seconds until a disconnect message has been received and the BLE Device is 
+removed from the active devices list. The same is true if a connected device shuts down or becomes unreachable and is disconnected.
+
+The AWS Greengrass Bluetooth (BLE) IoT Gateway provides an asychronious connection state control topic which receives a 
+message every time a active BLE Device transistions from one connected state to another. 
+
+The State Transition Topic is: **aws-greengrass/things/THING_NAME/ble/state**
+Subscribe to this topic on either IPC or MQTT message busses to receive asychronious BLE device connectivity state transitions. 
+
+An example of a BLE state transition message is as per below: 
+```
+{
+  "control-command": "ble-conection-state-changed",
+  "ble-mac": "3C:61:05:12:EE:0A",
+  "updated": "20211209153659670182",
+  "data": {
+    "previous-state": {
+      "connection-state": "disc",
+      "addr-type": "N/A"
+    },
+    "current_state": {
+      "connection-state": "conn",
+      "addr-type": "public"
+    }
+  }
+}
+```
+
+Valid connection-states are:
+* **waiting-init** - Waiting for connection to be initilised,
+* **conn** - connected,
+* **disc** - disconnected, 
+* **scan** BLE scan in progress
+* **tryconn** - connecting.
+
+When connecting or disconecting to a BLE device, the AWS Greengrass Bluetooth (BLE) IoT Gateway will provide a synchronious (immediate) 
+acknowledgemnet response that the requst is being provessed on the connect/response and disconnect/resonse topics. This is just so
+applicactin logic can move to the next task while it monitors the state transition topic for the requested change to be inacted. 
+
 #### BLE Device Connect:  
 
 Requests the AWS Greengrass BLE Gateway attempt to pair with BLE device with the given MAC address. 
@@ -73,8 +119,12 @@ fails it will re-attempt to pair again until a disconnect request is received.
 The connected devices list does not survive a Greengrass device reboot. Future iterations will 
 write this to a local shadow instead but in this initial release, you must monitor BLE device connection state.
 
-**Note:** If the device doesn’t exist, it will continue to try for up to 30 seconds before returning a failed connection. 
-If the delay causes a problem for application logic then perform a scan first to ensure the device exists and is reachable.  
+**Note:** If the device doesn’t exist, it will continue to try for up to 40 seconds before returning a failed connection. 
+
+If the delay causes a problem for application logic then perform a scan first to ensure the device exists and is reachable.
+To minimise the impact of long lived connect processes, the AWS Greengrass BLE Gateway attempt provides an immediate 
+acknowledgement of this request in the connect/response topic, the application shold monitor the state transition topic 
+for an asynchronious update indicating the requesting connection has been made. 
 
 **Connect Request Topic:** aws-greengrass/things/**THING_NAME**/ble/control/connect  
 **Connect Response Topic:** aws-greengrass/things/**THING_NAME**/ble/control/connect/response  
@@ -89,13 +139,14 @@ If the delay causes a problem for application logic then perform a scan first to
 **Sample Responses:**  
 ```
 {
-    "status": 200,
-    "data": {
-        "ble-mac": "XX:XX:XX:XX:XX:XX",
-        "connect-status": "success"
-    }
+  "status": 200,
+  "data": {
+    "ble-mac": "3C:61:05:12:EE:0A",
+    "connect_status": "request-accepted"
+  }
 }
 ```
+
 
 **BLE Device Disconnect:**  
 
@@ -115,13 +166,16 @@ the BLE connection if active and remove the BLE Device MAC from the locally main
 **Sample Response:**  
 ```
 {
-    "status": 200,
-    "data": {
-        "ble-mac": "XX:XX:XX:XX:XX:XX",
-        "disconnect-status": "success"
-    }
+  "status": 200,
+  "data": {
+    "ble-mac": "3C:61:05:12:EE:0A",
+    "disconnect_status": "request-accepted"
+  }
 }
 ```
+
+As per the state transition and connect sections above. This response is only an acknowledgemnet of the request to 
+disconnect a device. The application should monitor the state transition topic for when it has been completed. 
 
 **BLE Device List:**   
 The BLE Device list command returns the connection state of all devices in the connected device list. 
@@ -153,7 +207,10 @@ have had a connection request, scan will return information on all devices withi
 **BLE Device Scan:**  
 
 The BLE Device scan returns details of all BLE devices within range of the AWS Greengrass BLE Gateway. 
-By default, the scan is set for 5 seconds and so the response will take at least that long. 
+By default, the scan is set for 5 seconds and so the response will take at least that long.
+
+**Note:** Running a BLE Scan will disconnect existing BLE Peripherals. The application will automatically 
+attempt to re-connect once the scan is complete.
 
 BLE devices can advertise a number of supported data types including a description (BLE Ad-Type: 255) and 
 the BLE Complete Local Name (BLE Ad-Type: 9). In the ESP32 micro-python code sample provided, both of these are 
@@ -419,7 +476,29 @@ Record the Mac address of this device and send a connect command as described ab
 }
 ```
 
-2. Toggle LED:  
+2. Request entire message is reflected / returned in RX Data Topic (good to test latency and MTU).
+Request:
+```
+{
+  "command" : "reflect-message",
+  "data" : {
+    "Message 01" : "Some Data Message",
+    "Message 02" : "Some Other Data Message"
+  }
+}
+```
+Response:
+```
+{
+  "command" : "reflect-message",
+  "data" : {
+    "Message 01" : "Some Data Message",
+    "Message 02" : "Some Other Data Message"
+  }
+}
+```
+
+3. Toggle LED:  
 ```
 {
   "command" : "toggle_led"
@@ -436,7 +515,7 @@ Response:
 }
 ```
 
-3. Request BLE Device Processor Board Temperature
+4. Request BLE Device Processor Board Temperature
 ```
 {
   "command" : "get-processor-board-temp"
@@ -454,7 +533,7 @@ Response:
 }
 ```
 
-4. Request a HW reset of the BLE devices.
+5. Request a HW reset of the BLE devices.
 ```
 {
   "command" : "hw-reset-micro"
